@@ -9,6 +9,8 @@ type Props={
   status:CameraStatus
   enabled:boolean
   paused:boolean
+  /** 桌面端右侧工坊展开时平滑向左避让，避免与液态玻璃侧栏重叠 */
+  shifted?:boolean
 }
 
 function handCorners(hand:Hand,width:number,height:number){
@@ -29,7 +31,7 @@ function handCorners(hand:Hand,width:number,height:number){
   ].join(' ')
 }
 
-export function CameraPreview({ref,video,status,enabled,paused}:Props){
+export function CameraPreview({ref,video,status,enabled,paused,shifted=false}:Props){
   const overlay=useRef<SVGSVGElement>(null)
   const lastCount=useRef<number|null>(null)
   const [count,setCount]=useState<number|null>(null)
@@ -55,12 +57,18 @@ export function CameraPreview({ref,video,status,enabled,paused}:Props){
       if(lastCount.current!==tracked.length){lastCount.current=tracked.length;setCount(tracked.length)}
     }
   }),[clear,visible,paused,status,video])
+
   const label=status==='loading'?'正在加载识别模型':paused?'识别已暂停':count===null?'正在检测手部':count===0?'未检测到手':`已识别 ${count} 只手`
-  return <aside className={'camera-monitor'+(visible?' is-visible':'')} aria-label="摄像头取景" aria-hidden={!visible}>
+
+  return <aside
+    className={`camera-monitor${visible?' is-visible':''}${shifted?' is-shifted':''}`}
+    aria-label="摄像头取景"
+    aria-hidden={!visible}
+  >
     <div className="camera-frame">
       <video ref={video} muted playsInline aria-label="镜像摄像头预览"/>
       <svg ref={overlay} aria-hidden="true"><path vectorEffect="non-scaling-stroke"/><path vectorEffect="non-scaling-stroke"/></svg>
     </div>
-    <div className="camera-readout" data-tracked={status==='on'&&!paused&&!!count} role="status"><i aria-hidden="true"/>{label}</div>
+    <div className="camera-readout" data-tracked={status==='on'&&!paused&&!!count} role="status"><i aria-hidden="true"/><span>{label}</span></div>
   </aside>
 }

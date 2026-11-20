@@ -1,5 +1,6 @@
 import type {Raster} from './sampling'
 export const palettes=[
+  {name:'星砂',colors:['#f4d9b2','#d5b6fa','#9adbfa']},
   {name:'晨雾',colors:['#9bdbfb','#d2a7ff','#ffe2c1']},
   {name:'潮汐',colors:['#96f1d7','#80cafa','#a6a8fd']},
   {name:'余晖',colors:['#ffbe81','#fba6bb','#c7a6f6']}

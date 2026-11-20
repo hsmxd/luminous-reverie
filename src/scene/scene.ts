@@ -7,7 +7,10 @@ import {ParticleMorph} from '../particles/morph'
 import {InteractionManager} from '../interaction/manager'
 import * as sh from '../shaders/art'
 import {nightSky} from './sky'
+
 export type Stats={fps:number;count:number;bloom:boolean}
+export type LayoutMode='welcome'|'studio'|'immersive'
+
 export class ArtScene{
   readonly shapes:Shape[]
   readonly input=new InteractionManager()
@@ -32,13 +35,16 @@ export class ArtScene{
   private observer:ResizeObserver
   private raf=0;private last=0;private time=0;private paused=false;private disposed=false
   private width=1;private height=1;private viewWidth=1;private viewHeight=1
+  private layoutMode:LayoutMode='welcome'
   private originX=0;private originY=0
+  private targetOriginX=0;private targetOriginY=0
   private cap:number=settings.initial;private count:number=settings.initial
   private elapsed=0;private frames=0;private slow=0;private fast=0
   private ratio=1;private bloom=true;private power=1
+
   constructor(private host:HTMLElement,private report:(stats:Stats)=>void,private lost:()=>void){
     this.gl=new T.WebGLRenderer({alpha:false,antialias:false,powerPreference:'high-performance',preserveDrawingBuffer:false})
-    this.gl.setClearColor(0x080a16);this.gl.outputColorSpace=T.LinearSRGBColorSpace
+    this.gl.setClearColor(0x04060d);this.gl.outputColorSpace=T.LinearSRGBColorSpace
     this.scene.background=nightSky();this.camera.position.z=12
     this.shapes=createForms(settings.max)
     const rand=new Float32Array(settings.max)
@@ -78,8 +84,22 @@ export class ArtScene{
     this.postScene.add(new T.Mesh(new T.PlaneGeometry(2,2),this.post))
     host.appendChild(this.gl.domElement);this.gl.domElement.addEventListener('webglcontextlost',this.contextLost)
     this.observer=new ResizeObserver(()=>this.resize());this.observer.observe(host)
-    document.addEventListener('visibilitychange',this.visibility);this.resize();this.loop()
+    document.addEventListener('visibilitychange',this.visibility);this.resize(true);this.loop()
   }
+
+  /**
+   * 根据界面状态平滑调整三维粒子重心：
+   * - welcome：桌面端居右与左侧标题呼应
+   * - studio：桌面端平滑左移避开右侧液态玻璃工坊；移动端上移避开底部抽屉
+   * - immersive：居中成为绝对视觉主角
+   */
+  setLayoutMode(mode:LayoutMode){
+    if(this.layoutMode===mode)return
+    this.layoutMode=mode
+    this.computeOrigin(false)
+    if(this.paused){this.originX=this.targetOriginX;this.originY=this.targetOriginY;this.draw(0,performance.now())}
+  }
+
   select(index:number){
     this.art.active=index===4
     if(index<4)this.morph.select(index)
@@ -90,7 +110,22 @@ export class ArtScene{
   density(cap:number){this.cap=cap;this.count=cap;this.slow=this.fast=0;if(this.paused)this.draw(0,performance.now())}
   intensity(value:number){this.power=value}
   pause(value:boolean){this.paused=value;this.visibility()}
-  private resize(){
+
+  private computeOrigin(snap:boolean){
+    const mobile=this.width<760
+    if(mobile){
+      this.targetOriginX=0
+      this.targetOriginY=(this.layoutMode==='studio'?.245:this.layoutMode==='immersive'?.035:-.015)*this.viewHeight
+    }else{
+      const xRatio=this.layoutMode==='studio'?-.145:this.layoutMode==='immersive'?0:.135
+      const yRatio=this.layoutMode==='immersive'?.032:.038
+      this.targetOriginX=xRatio*this.viewWidth
+      this.targetOriginY=yRatio*this.viewHeight
+    }
+    if(snap){this.originX=this.targetOriginX;this.originY=this.targetOriginY}
+  }
+
+  private resize(snap=false){
     this.width=this.host.clientWidth||1;this.height=this.host.clientHeight||1
     this.ratio=Math.min(window.devicePixelRatio||1,this.bloom?1.65:1.1)
     this.gl.setPixelRatio(this.ratio);this.gl.setSize(this.width,this.height,false)
@@ -98,10 +133,10 @@ export class ArtScene{
     this.post.uniforms.pixel.value.set(1/this.target.width,1/this.target.height)
     this.camera.aspect=this.width/this.height
     const mobile=this.width<760
-    const desired=Math.min(this.height*(mobile?.45:.66),this.width*(mobile?.91:.52))
+    const desired=Math.min(this.height*(mobile?.44:.70),this.width*(mobile?.88:.54))
     this.viewHeight=this.height*4.92/desired;this.viewWidth=this.viewHeight*this.camera.aspect
     this.camera.fov=T.MathUtils.radToDeg(2*Math.atan(this.viewHeight/24));this.camera.updateProjectionMatrix()
-    this.originX=(mobile?.035:.145)*this.viewWidth;this.originY=(mobile?.006:.044)*this.viewHeight
+    this.computeOrigin(snap)
     if(this.paused)this.draw(0,performance.now())
   }
   private contextLost=(e:Event)=>{e.preventDefault();this.pause(true);this.lost()}
@@ -123,6 +158,9 @@ export class ArtScene{
   private draw(dt:number,now:number){
     this.time+=dt;this.input.update(dt,now);this.morph.update(dt,settings.morphSeconds)
     this.art.update(dt,this.height/this.viewHeight,this.count,this.ratio)
+    const follow=1-Math.exp(-dt*7.5)
+    this.originX+=(this.targetOriginX-this.originX)*follow
+    this.originY+=(this.targetOriginY-this.originY)*follow
     const m=this.input.current,u=this.mat.uniforms
     u.time.value=this.time;u.pointScale.value=this.ratio*clamp(this.height/800,.79,1.35)
     u.power.value=this.power;u.burst.value=this.input.burstAge;u.ripple.value=this.input.rippleAge;u.field.value=m.field;u.gather.value=m.gather
