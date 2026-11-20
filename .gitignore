@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.tools/
+.qa/
+public/vision/
+*.log
+/TESTING.md
+.env
+.env.*
